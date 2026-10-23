@@ -59,7 +59,7 @@ The tests use a fake client, so they run offline and need no API key.
 A scheduled workflow checks the pinned dependencies once a week at a random time, bumps them when the tests still pass and records the result in [MAINTENANCE.md](MAINTENANCE.md).
 
 <!-- maintenance:start -->
-**Last maintenance:** not run yet
+**Last maintenance:** 2026-10-23 · All 3 pinned packages current · tests ✅ 14 passed
 <!-- maintenance:end -->
 
 ## License
