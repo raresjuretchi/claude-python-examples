@@ -1,0 +1,64 @@
+name: Weekly maintenance
+
+# Wakes up every two hours, but the script only does real work once a week,
+# at a random day and time (08:00–22:00 Europe/Madrid) that changes every week.
+on:
+  schedule:
+    - cron: "17 */2 * * *"
+  workflow_dispatch:
+    inputs:
+      force:
+        description: "Run now instead of waiting for this week's random slot"
+        type: boolean
+        default: false
+
+permissions:
+  contents: write
+
+concurrency:
+  group: weekly-maintenance
+  cancel-in-progress: false
+
+jobs:
+  maintain:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      MAINT_TZ: Europe/Madrid
+      MAINT_START_HOUR: "8"
+      MAINT_END_HOUR: "22"
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.12"
+
+      - name: Install maintenance helper
+        run: python -m pip install --quiet --disable-pip-version-check "packaging>=24"
+
+      - name: Run weekly maintenance
+        id: maint
+        env:
+          FORCE: ${{ inputs.force || 'false' }}
+        run: python .github/scripts/weekly_maintenance.py
+
+      - name: Commit and push
+        if: steps.maint.outputs.changed == 'true'
+        env:
+          # Override with repository variables COMMIT_AUTHOR_NAME / COMMIT_AUTHOR_EMAIL.
+          AUTHOR_NAME: ${{ vars.COMMIT_AUTHOR_NAME || github.repository_owner }}
+          AUTHOR_EMAIL: ${{ vars.COMMIT_AUTHOR_EMAIL || format('{0}+{1}@users.noreply.github.com', github.repository_owner_id, github.repository_owner) }}
+          MESSAGE_FILE: ${{ steps.maint.outputs.commit_message_file }}
+        run: |
+          git config user.name "$AUTHOR_NAME"
+          git config user.email "$AUTHOR_EMAIL"
+          git add -A
+          git commit --file "$MESSAGE_FILE"
+          git push
+
+      - name: Flag a failing test suite
+        if: steps.maint.outputs.tests_ok == 'false'
+        run: |
+          echo "::error::The test suite fails even with the previous dependency pins. See MAINTENANCE.md."
+          exit 1
